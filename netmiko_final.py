@@ -1,12 +1,12 @@
 from netmiko import ConnectHandler
 from pprint import pprint
 
-device_ip = "<!!!REPLACEME with router IP address!!!>"
+device_ip = "10.0.15.181"
 username = "admin"
 password = "cisco"
 
 device_params = {
-    "device_type": "<!!!REPLACEME with device type for netmiko!!!>",
+    "device_type": "cisco_ios_telnet",
     "ip": device_ip,
     "username": username,
     "password": password,
