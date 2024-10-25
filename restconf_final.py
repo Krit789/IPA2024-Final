@@ -110,8 +110,6 @@ def disable():
         return f"Cannot shutdown: Interface loopback {studentID}"
 
 def status():
-    # api_url_status = "<!!!REPLACEME with URL of RESTCONF Operational API!!!>"
-
     resp = requests.get(
         f"{api_url}/ietf-interfaces:interfaces-state/interface=Loopback{studentID}",
         auth=basicauth,

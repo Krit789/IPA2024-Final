@@ -20,8 +20,7 @@ def gigabit_status():
         down = 0
         admin_down = 0
         result = ssh.send_command("sh int", use_textfsm=True)
-        # pprint(result)
-        for index, status in enumerate(result):
+        for status in result:
             if status["interface"].startswith("GigabitEthernet"):
                 ans += f"{status['interface']} {status['link_status']}, "
                 if status['link_status'] == "up":
@@ -34,5 +33,3 @@ def gigabit_status():
         ans = f"{ans[:-2]} -> {up} up, {down} down, {admin_down} administratively down"
         pprint(ans)
         return ans
-
-# print(gigabit_status())

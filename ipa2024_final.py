@@ -7,25 +7,30 @@
 # 1. Import libraries for API requests, JSON formatting, time, os, (restconf_final or netconf_final), netmiko_final, and ansible_final.
 
 import requests
+from requests_toolbelt.multipart.encoder import MultipartEncoder
 import json
 import time
 import os
 import restconf_final
-# from dotenv import load_dotenv
+import netmiko_final
+import ansible_final
+from dotenv import load_dotenv
 
 #######################################################################################
 # 2. Assign the Webex access token to the variable ACCESS_TOKEN using environment variables.
 
-# load_dotenv()
-ACCESS_TOKEN = os.environ.get('ACCESS_TOKEN')
-print(ACCESS_TOKEN)
+load_dotenv()
+ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
+print("Current token is",ACCESS_TOKEN)
 #######################################################################################
 # 3. Prepare parameters get the latest message for messages API.
 
 # Defines a variable that will hold the roomId
-roomIdToGetMessages = (
-    "Y2lzY29zcGFyazovL3VybjpURUFNOnVzLXdlc3QtMl9yL1JPT00vZDI3ZjBjNDAtNWU5ZS0xMWVmLTgwZDQtYjU2NjZlZjc4Nzc1" # TODO: Change to Production room aka. IPA2024
-)
+roomIdToGetMessages = os.environ.get("WEBEX_ROOM_ID")
+print("Current Room ID is",roomIdToGetMessages)
+if roomIdToGetMessages is None:
+    print("Using hardcoded id instead...")
+    roomIdToGetMessages = "Y2lzY29zcGFyazovL3VzL1JPT00vNTFmNTJiMjAtNWQwYi0xMWVmLWE5YTAtNzlkNTQ0ZjRkNGZi"  # TODO: Change to Production room aka. IPA2024
 
 while True:
     # always add 1 second of delay to the loop to not go over a rate limit of API calls
@@ -39,8 +44,8 @@ while True:
     # the Webex Teams HTTP header, including the Authoriztion
     getHTTPHeader = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
 
-# 4. Provide the URL to the Webex Teams messages API, and extract location from the received message.
-    
+    # 4. Provide the URL to the Webex Teams messages API, and extract location from the received message.
+
     # Send a GET request to the Webex Teams messages API.
     # - Use the GetParameters to get only the latest message.
     # - Store the message in the "r" variable.
@@ -52,7 +57,9 @@ while True:
     # verify if the retuned HTTP status code is 200/OK
     if not r.status_code == 200:
         raise Exception(
-            "Incorrect reply from Webex Teams API. Status code: {}".format(r.status_code)
+            "Incorrect reply from Webex Teams API. Status code: {}".format(
+                r.status_code
+            )
         )
 
     # get the JSON formatted returned data
@@ -64,7 +71,7 @@ while True:
 
     # store the array of messages
     messages = json_data["items"]
-    
+
     # store the text of the first message in the array
     message = messages[0]["text"]
     print("Received message: " + message)
@@ -77,7 +84,7 @@ while True:
         command = message.split("/65070030 ")[1].split(" ")[0].lower().strip()
         print(command)
 
-# 5. Complete the logic for each command
+        # 5. Complete the logic for each command
 
         if command == "create":
             responseMessage = restconf_final.create()
@@ -88,18 +95,17 @@ while True:
         elif command == "disable":
             responseMessage = restconf_final.disable()
         elif command == "status":
-           responseMessage = restconf_final.status()
+            responseMessage = restconf_final.status()
         elif command == "gigabit_status":
-            # <!!!REPLACEME with code for gigabit_status command!!!>
-            raise Exception("Not implemented yet")
+            responseMessage = netmiko_final.gigabit_status()
         elif command == "showrun":
-            # <!!!REPLACEME with code for showrun command!!!>
-            raise Exception("Not implemented yet")
-        
+            response = ansible_final.showrun()
+            responseMessage = response["msg"]
+            print(responseMessage)
         else:
             responseMessage = "Error: No command or unknown command"
-        
-# 6. Complete the code to post the message to the Webex Teams room.
+
+        # 6. Complete the code to post the message to the Webex Teams room.
 
         # The Webex Teams POST JSON data for command showrun
         # - "roomId" is is ID of the selected room
@@ -107,35 +113,37 @@ while True:
         # - "files": is a tuple of filename, fileobject, and filetype.
 
         # the Webex Teams HTTP headers, including the Authoriztion and Content-Type
-        
+
         # Prepare postData and HTTPHeaders for command showrun
-        # Need to attach file if responseMessage is 'ok'; 
+        # Need to attach file if responseMessage is 'ok';
         # Read Send a Message with Attachments Local File Attachments
         # https://developer.webex.com/docs/basics for more detail
 
-        if command == "showrun" and responseMessage == 'ok':
-            # raise Exception("not implemented yet") 
-            # filename = "<!!!REPLACEME with show run filename and path!!!>"
-            # fileobject = <!!!REPLACEME with open file!!!>
-            # filetype = "<!!!REPLACEME with Content-type of the file!!!>"
-            # postData = {
-            #     "roomId": roomIdToGetMessages,
-            #     "text": "show running config",
-            #     "files": (<!!!REPLACEME!!!>, <!!!REPLACEME!!!>, <!!!REPLACEME!!!>),
-            # }
-            # postData = MultipartEncoder(<!!!REPLACEME!!!>)
-            # HTTPHeaders = {
-            # "Authorization": ACCESS_TOKEN,
-            # "Content-Type": "",
-            # }
-            pass
+        if command == "showrun" and responseMessage == "ok":
+            print("Sending show running config")
+            filename = "./backups/show_run_65070030_CSR1KV-Pod1-1.txt"
+            fileobject = open(filename, "rb")
+            filetype = "text/plain"
+            postData = {
+                "roomId": roomIdToGetMessages,
+                "text": "show running config",
+                "files": ("show_run_65070030_CSR1KV-Pod1-1.txt", fileobject, filetype),
+            }
+            postData = MultipartEncoder(postData)
+            HTTPHeaders = {
+                "Authorization": f"Bearer {ACCESS_TOKEN}",
+                "Content-Type": postData.content_type,
+            }
         # other commands only send text, or no attached file.
         else:
             postData = {"roomId": roomIdToGetMessages, "text": responseMessage}
             postData = json.dumps(postData)
 
             # the Webex Teams HTTP headers, including the Authoriztion and Content-Type
-            HTTPHeaders = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json" }   
+            HTTPHeaders = {
+                "Authorization": f"Bearer {ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            }
 
         # Post the call to the Webex Teams message API.
         r = requests.post(
@@ -144,6 +152,9 @@ while True:
             headers=HTTPHeaders,
         )
         if not r.status_code == 200:
+            print(r.text)
             raise Exception(
-                "Incorrect reply from Webex Teams API. Status code: {}".format(r.status_code)
+                "Incorrect reply from Webex Teams API. Status code: {}".format(
+                    r.status_code
+                )
             )
